@@ -452,18 +452,18 @@ def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=No
         ax.add_patch(Rectangle((obs[0] - 0.5, obs[1] - 0.5), 1, 1, color="black", alpha=1))
         # 绘制额外的一圈障碍物（位于地图四周）
     for i in range(length):
-        ax.add_patch(Rectangle((i - 0.5, -1 - 0.5), 1, 1, color="gray", alpha=0.5))  # 底边
-        ax.add_patch(Rectangle((i - 0.5, width - 0.5), 1, 1, color="gray", alpha=0.5))  # 顶边
+        ax.add_patch(Rectangle((i - 0.5, -1 - 0.5), 1, 1, color="black", alpha=0.5))  # 底边
+        ax.add_patch(Rectangle((i - 0.5, width - 0.5), 1, 1, color="black", alpha=0.5))  # 顶边
 
     for i in range(width):
-        ax.add_patch(Rectangle((-1 - 0.5, i - 0.5), 1, 1, color="gray", alpha=0.5))  # 左边
-        ax.add_patch(Rectangle((length - 0.5, i - 0.5), 1, 1, color="gray", alpha=0.5))  # 右边
+        ax.add_patch(Rectangle((-1 - 0.5, i - 0.5), 1, 1, color="black", alpha=0.5))  # 左边
+        ax.add_patch(Rectangle((length - 0.5, i - 0.5), 1, 1, color="black", alpha=0.5))  # 右边
 
         # 四个角的障碍物
-    ax.add_patch(Rectangle((-1 - 0.5, -1 - 0.5), 1, 1, color="gray", alpha=0.5))  # 左下角
-    ax.add_patch(Rectangle((length - 0.5, -1 - 0.5), 1, 1, color="gray", alpha=0.5))  # 右下角
-    ax.add_patch(Rectangle((-1 - 0.5, width - 0.5), 1, 1, color="gray", alpha=0.5))  # 左上角
-    ax.add_patch(Rectangle((length - 0.5, width - 0.5), 1, 1, color="gray", alpha=0.5))  # 右上角
+    ax.add_patch(Rectangle((-1 - 0.5, -1 - 0.5), 1, 1, color="black", alpha=0.5))  # 左下角
+    ax.add_patch(Rectangle((length - 0.5, -1 - 0.5), 1, 1, color="black", alpha=0.5))  # 右下角
+    ax.add_patch(Rectangle((-1 - 0.5, width - 0.5), 1, 1, color="black", alpha=0.5))  # 左上角
+    ax.add_patch(Rectangle((length - 0.5, width - 0.5), 1, 1, color="black", alpha=0.5))  # 右上角
 
     grid = np.zeros((10, 10), dtype=int)
 
