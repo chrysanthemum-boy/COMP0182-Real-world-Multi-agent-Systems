@@ -104,7 +104,7 @@ class RRT(object):
         self.is_at_goal = env.is_at_goal
         self.is_around_goal = env.is_around_goal
         self.get_neighbors = env.get_neighbors  # 不一定需要在RRT中使用
-        self.max_iterations = 100000  # 最大扩展次数
+        self.max_iterations = 50000  # 最大扩展次数
         self.step_size = 0.1  # 步长
         self.tree = []
 
@@ -148,12 +148,12 @@ class RRT(object):
 
         self.tree = [initial_state]  # 初始化树，树的根节点是 initial_state
         parent_map = {initial_state: None}  # 记录每个节点的父节点
-
+        random.seed(42)
         for _ in range(max_iterations):
             # 从树中选择一个节点，并在该节点周围扩展
             # random_node = self.select_nearby_node(tree)
             random_node = State(self.tree[-1].time + 1,  # 随机生成time并增加
-                                Location(random.uniform(0, 10), random.uniform(0, 10)))
+                                Location(random.randint(0, 10,), random.randint(0, 10)))
             # 找到树中离random_node最近的节点
             nearest_node = self.nearest(self.tree, random_node)
 
@@ -191,8 +191,8 @@ class RRT(object):
         # 判断当前点是否在任何障碍物方块内
         for obstacle in self.obstacles:
             # 如果路径点的坐标在障碍物的范围内
-            if obstacle[0] - 0.2 < state.location.x < obstacle[0] + 1.2 and \
-                    obstacle[1] - 0.7 < state.location.y < obstacle[1] + 0.7:
+            if obstacle[0] - 0.9 < state.location.x < obstacle[0] + 0.9 and \
+                    obstacle[1] - 0.9 < state.location.y < obstacle[1] + 0.9:
                 return False
 
         # 检查是否与任何约束冲突（例如，时间或其他状态约束）
@@ -253,10 +253,10 @@ class RRT(object):
 
             # 生成障碍物的四条边
             obstacle_edges = [
-                ((obs_x, obs_y + 0.5), (obs_x + 1, obs_y + 0.5)),  # 上边
-                ((obs_x, obs_y - 0.5), (obs_x, obs_y + 0.5)),  # 左边
-                ((obs_x + 1, obs_y - 0.5), (obs_x + 1, obs_y + 0.5)),  # 右边
-                ((obs_x, obs_y - 0.5), (obs_x + 1, obs_y - 0.5))  # 下边
+                ((obs_x, obs_y + 0.9), (obs_x + 1, obs_y + 0.9)),  # 上边
+                ((obs_x, obs_y - 0.9), (obs_x, obs_y + 0.9)),  # 左边
+                ((obs_x + 1, obs_y - 0.9), (obs_x + 1, obs_y + 0.9)),  # 右边
+                ((obs_x, obs_y - 0.9), (obs_x + 1, obs_y - 0.9))  # 下边
             ]
 
             # 检查路径是否与障碍物的四条边相交
