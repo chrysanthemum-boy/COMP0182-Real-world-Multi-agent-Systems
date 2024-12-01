@@ -161,7 +161,8 @@ class RRT(object):
             new_node = self.steer(nearest_node, random_node)
 
             # 如果新节点有效（没有碰撞等）
-            if new_node:
+            if new_node is not None:
+                # print(new_node)
                 if self.state_valid(new_node):
                     new_node.time = nearest_node.time + 1
                     self.tree.append(new_node)
@@ -176,20 +177,6 @@ class RRT(object):
 
         return False  # 如果超过最大迭代次数还未找到路径，则返回失败
 
-    def select_nearby_node(self, tree):
-        rand_node = random.choice(tree)  # 从树中随机选择一个节点
-        rand_location = rand_node.location
-        return State(rand_node.time + 1, Location(
-            random.uniform(rand_location.x - 1, rand_location.x + 1),  # 随机选择邻域内的点
-            random.uniform(rand_location.y - 1, rand_location.y + 1)
-        ))
-
-    # def state_valid(self, state):
-    #     return state.location.x >= 0 and state.location.x < self.dimension[0] \
-    #         and state.location.y >= 0 and state.location.y < self.dimension[1] \
-    #         and VertexConstraint(state.time, state.location) not in self.constraints.vertex_constraints \
-    #         and (state.location.x, state.location.y) not in self.obstacles
-
     def state_valid(self, state):
         """
         判断状态是否有效，即是否碰到障碍物（考虑障碍物为1x1的方块）
@@ -197,15 +184,15 @@ class RRT(object):
         :return: 如果有效返回True，否则返回False
         """
         # 确保位置在合法范围内（地图边界内）
-        if state.location.x < 0 or state.location.x >= self.dimension[0] \
-                or state.location.y < 0 or state.location.y >= self.dimension[1]:
+        if state.location.x < 0 or state.location.x >= self.dimension[0]\
+                or state.location.y < 0 or state.location.y >= self.dimension[1] - 0.5:
             return False
 
         # 判断当前点是否在任何障碍物方块内
         for obstacle in self.obstacles:
             # 如果路径点的坐标在障碍物的范围内
-            if obstacle[0] <= state.location.x < obstacle[0] + 1 and \
-                    obstacle[1] - 0.5 <= state.location.y < obstacle[1] + 0.5:
+            if obstacle[0] - 0.2 < state.location.x < obstacle[0] + 1.2 and \
+                    obstacle[1] - 0.7 < state.location.y < obstacle[1] + 0.7:
                 return False
 
         # 检查是否与任何约束冲突（例如，时间或其他状态约束）
@@ -266,10 +253,10 @@ class RRT(object):
 
             # 生成障碍物的四条边
             obstacle_edges = [
-                ((obs_x, obs_y), (obs_x + 0.5, obs_y)),  # 上边
-                ((obs_x, obs_y), (obs_x, obs_y + 1)),  # 左边
-                ((obs_x + 1, obs_y), (obs_x + 1, obs_y + 1)),  # 右边
-                ((obs_x, obs_y + 0.5), (obs_x + 0.5, obs_y + 0.5))  # 下边
+                ((obs_x, obs_y + 0.5), (obs_x + 1, obs_y + 0.5)),  # 上边
+                ((obs_x, obs_y - 0.5), (obs_x, obs_y + 0.5)),  # 左边
+                ((obs_x + 1, obs_y - 0.5), (obs_x + 1, obs_y + 0.5)),  # 右边
+                ((obs_x, obs_y - 0.5), (obs_x + 1, obs_y - 0.5))  # 下边
             ]
 
             # 检查路径是否与障碍物的四条边相交
