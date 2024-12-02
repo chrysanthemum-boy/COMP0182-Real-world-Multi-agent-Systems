@@ -505,7 +505,7 @@ def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=No
     ax.legend(loc='lower right')
 
     # 保存图像
-    plt.savefig(f"rrt*{num + 1}.png", dpi=300)
+    plt.savefig(f"rrt_star{num + 1}.png", dpi=300)
     plt.show()
 
 
