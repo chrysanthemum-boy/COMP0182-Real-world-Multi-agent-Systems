@@ -23,6 +23,7 @@ import openai
 from a_star import AStar
 from nmpc import NMPCPlanner
 from rrt import RRT
+from rrt_star import RRTStar
 
 
 # from a_star import AStar
@@ -159,6 +160,7 @@ class Environment(object):
 
         self.a_star = AStar(self)
         self.rrt = RRT(self)
+        self.rrt_star = RRTStar(self)
         self.rrt_tree = []
         # self.nmpc_planner = NMPCPlanner()
 
@@ -285,8 +287,9 @@ class Environment(object):
         for agent in self.agent_dict.keys():
             self.constraints = self.constraint_dict.setdefault(agent, Constraints())
             # local_solution = self.a_star.search(agent)
-            local_solution = self.rrt.search(agent)
-            self.rrt_tree.append(self.rrt.tree)
+            # local_solution = self.rrt.search(agent)
+            local_solution = self.rrt_star.search(agent)
+            self.rrt_tree.append(self.rrt_star.tree)
             if not local_solution:
                 return False
             solution.update({agent: local_solution})
@@ -496,13 +499,13 @@ def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=No
     ax.set_yticks(range(10))
     ax.set_xticklabels(range(10))
     ax.set_yticklabels(range(10))
-    ax.set_title("RRT & CBS Path Planning")
+    ax.set_title("RRT Star & CBS Path Planning")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.legend(loc='lower right')
 
     # 保存图像
-    plt.savefig(f"rrt{num + 1}.png", dpi=300)
+    plt.savefig(f"rrt*{num + 1}.png", dpi=300)
     plt.show()
 
 

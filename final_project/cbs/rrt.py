@@ -105,7 +105,7 @@ class RRT(object):
         self.is_around_goal = env.is_around_goal
         self.get_neighbors = env.get_neighbors  # 不一定需要在RRT中使用
         self.max_iterations = 50000  # 最大扩展次数
-        self.step_size = 0.1  # 步长
+        self.step_size = 0.5  # 步长
         self.tree = []
 
     def distance(self, p1, p2):
