@@ -19,7 +19,7 @@ Qc = 5.0                      # 碰撞代价权重
 kappa = 4.0                   # 碰撞代价调整系数
 
 # NMPC 参数
-HORIZON_LENGTH = 8            # 预测时域长度
+HORIZON_LENGTH = 20            # 预测时域长度
 NMPC_TIMESTEP = 0.3           # NMPC计算的时间步
 upper_bound = [(1/np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
 lower_bound = [-(1/np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
@@ -87,7 +87,7 @@ def simulate(filename):
             robot_histories[robot_index][:, t] = robot_states[robot_index]
 
     # 绘制机器人和障碍物
-    plot_robots_and_obstacles(robot_histories, obstacles, ROBOT_RADIUS,obstacle_radius, NUMBER_OF_TIMESTEPS, SIM_TIME, filename)
+    plot_robots_and_obstacles(robot_histories, obstacles, ROBOT_RADIUS, NUMBER_OF_TIMESTEPS, SIM_TIME, filename)
 
 
 # 计算最优控制输入
@@ -156,7 +156,7 @@ def update_state(x0, u, timestep):
 
 
 # 绘制机器人和障碍物的运动轨迹
-def plot_robots_and_obstacles(robots, obstacles, robot_radius,obstacle_radius, num_steps, sim_time, filename):
+def plot_robots_and_obstacles(robots, obstacles, robot_radius, num_steps, sim_time, filename):
     """
     绘制多个机器人和障碍物的动画，并保存到文件。
 
@@ -172,38 +172,40 @@ def plot_robots_and_obstacles(robots, obstacles, robot_radius,obstacle_radius, n
     ax.set_ylim(-1.5, 10.5)
     ax.set_aspect('equal')
     ax.grid()
-    line, = ax.plot([], [], '--r')
 
     # 绘制固定障碍物
     for obs in obstacles:
-        ax.add_patch(Rectangle((obs[0] - 0.5, obs[1] - 0.5), 1, 1, color="blue",edgecolor="black", alpha=1))
-
+        ax.add_patch(Rectangle((obs[0] - 0.5, obs[1] - 0.5), 1, 1, edgecolor="black", alpha=1))
 
     # 初始化机器人和轨迹
     robot_patches = []
+    trajectory_lines = []  # 用于存储每个机器人的轨迹线对象
     for robot in robots:
+        # 初始化机器人
         patch = Circle((robot[0, 0], robot[1, 0]), robot_radius, facecolor='green', edgecolor='black')
         robot_patches.append(patch)
         ax.add_patch(patch)
 
+        # 初始化机器人轨迹
+        line, = ax.plot([], [], '--', label=f'Robot {len(robot_patches)}')  # 虚线表示轨迹
+        trajectory_lines.append(line)
+
     # 动画初始化
     def init():
         for patch in robot_patches:
-            patch.center = (0, 0)  # 初始化在屏幕外的点
-        return robot_patches
-
-    # def init():
-    #     # ax.add_patch(robot_patch)
-    #     # for obstacle in obstacle_list:
-    #     #     ax.add_patch(obstacle)
-    #     line.set_data([], [])
-    #     return [robot_patch] + [line] + obstacle_list
+            patch.center = (0, 0)  # 初始化机器人位置
+        for line in trajectory_lines:
+            line.set_data([], [])  # 清空轨迹
+        return robot_patches + trajectory_lines
 
     # 动画更新
     def animate(i):
         for idx, robot in enumerate(robots):
+            # 更新机器人位置
             robot_patches[idx].center = (robot[0, i], robot[1, i])
-        return robot_patches
+            # 更新轨迹
+            trajectory_lines[idx].set_data(robot[0, :i + 1], robot[1, :i + 1])  # 累积显示轨迹
+        return robot_patches + trajectory_lines
 
     # 动画实时显示
     init()
@@ -217,6 +219,7 @@ def plot_robots_and_obstacles(robots, obstacles, robot_radius,obstacle_radius, n
         ani = animation.FuncAnimation(
             fig, animate, frames=np.arange(1, num_steps), interval=200, blit=True, init_func=init)
         ani.save(filename, "ffmpeg", fps=30)
+
 
 
 # 运行仿真
