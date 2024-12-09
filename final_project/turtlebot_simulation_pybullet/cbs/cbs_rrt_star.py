@@ -6,45 +6,64 @@ author: Ashwin Bose (@atb033)
 
 """
 import sys
-sys.path.insert(0, '../')
+
+# import ollama
 from matplotlib import pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
 
+sys.path.insert(0, '../')
 import argparse
 import yaml
 from math import fabs
 from itertools import combinations
 from copy import deepcopy
+# import openai
 
 from cbs.a_star import AStar
+# from nmpc import NMPCPlanner
+from cbs.rrt_star import RRTStar
+
+
 # from a_star import AStar
 
 class Location(object):
     def __init__(self, x=-1, y=-1):
         self.x = x
         self.y = y
+
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
+
     def __str__(self):
         return str((self.x, self.y))
+
 
 class State(object):
     def __init__(self, time, location):
         self.time = time
         self.location = location
+
     def __eq__(self, other):
         return self.time == other.time and self.location == other.location
+
     def __hash__(self):
-        return hash(str(self.time)+str(self.location.x) + str(self.location.y))
+        return hash(str(self.time) + str(self.location.x) + str(self.location.y))
+
     def is_equal_except_time(self, state):
         return self.location == state.location
+
+    def is_around(self, state, bias):
+        return fabs(self.location.x - state.location.x) < bias and fabs(self.location.y - state.location.y) < bias
+
     def __str__(self):
         return str((self.time, self.location.x, self.location.y))
+
 
 class Conflict(object):
     VERTEX = 1
     EDGE = 2
+
     def __init__(self):
         self.time = -1
         self.type = -1
@@ -57,7 +76,27 @@ class Conflict(object):
 
     def __str__(self):
         return '(' + str(self.time) + ', ' + self.agent_1 + ', ' + self.agent_2 + \
-             ', '+ str(self.location_1) + ', ' + str(self.location_2) + ')'
+            ', ' + str(self.location_1) + ', ' + str(self.location_2) + ')'
+
+
+def resolve_conflict_with_llm(conflict):
+    prompt = f"""
+    Conflict detected:
+    - Time: {conflict['time']}
+    - Agent 1: {conflict['agent_1']} at location {conflict['location_1']}
+    - Agent 2: {conflict['agent_2']} at location {conflict['location_2']}
+
+    Suggest a resolution to this conflict without altering their end goals.
+    """
+
+    response = ollama.chat(
+        model="llama3.2",
+        messages=[{"role": "system", "content": "You are a conflict resolution expert for multi-agent systems."},
+                  {"role": "user", "content": prompt}]
+    )
+
+    return response['message']['content']
+
 
 class VertexConstraint(object):
     def __init__(self, time, location):
@@ -66,23 +105,30 @@ class VertexConstraint(object):
 
     def __eq__(self, other):
         return self.time == other.time and self.location == other.location
+
     def __hash__(self):
-        return hash(str(self.time)+str(self.location))
+        return hash(str(self.time) + str(self.location))
+
     def __str__(self):
-        return '(' + str(self.time) + ', '+ str(self.location) + ')'
+        return '(' + str(self.time) + ', ' + str(self.location) + ')'
+
 
 class EdgeConstraint(object):
     def __init__(self, time, location_1, location_2):
         self.time = time
         self.location_1 = location_1
         self.location_2 = location_2
+
     def __eq__(self, other):
         return self.time == other.time and self.location_1 == other.location_1 \
             and self.location_2 == other.location_2
+
     def __hash__(self):
         return hash(str(self.time) + str(self.location_1) + str(self.location_2))
+
     def __str__(self):
-        return '(' + str(self.time) + ', '+ str(self.location_1) +', '+ str(self.location_2) + ')'
+        return '(' + str(self.time) + ', ' + str(self.location_1) + ', ' + str(self.location_2) + ')'
+
 
 class Constraints(object):
     def __init__(self):
@@ -94,8 +140,9 @@ class Constraints(object):
         self.edge_constraints |= other.edge_constraints
 
     def __str__(self):
-        return "VC: " + str([str(vc) for vc in self.vertex_constraints])  + \
+        return "VC: " + str([str(vc) for vc in self.vertex_constraints]) + \
             "EC: " + str([str(ec) for ec in self.edge_constraints])
+
 
 class Environment(object):
     def __init__(self, dimension, agents, obstacles):
@@ -111,6 +158,9 @@ class Environment(object):
         self.constraint_dict = {}
 
         self.a_star = AStar(self)
+        self.rrt = RRTStar(self)
+        self.rrt_tree = []
+        # self.nmpc_planner = NMPCPlanner()
 
     def get_neighbors(self, state):
         neighbors = []
@@ -120,23 +170,22 @@ class Environment(object):
         if self.state_valid(n):
             neighbors.append(n)
         # Up action
-        n = State(state.time + 1, Location(state.location.x, state.location.y+1))
+        n = State(state.time + 1, Location(state.location.x, state.location.y + 1))
         if self.state_valid(n) and self.transition_valid(state, n):
             neighbors.append(n)
         # Down action
-        n = State(state.time + 1, Location(state.location.x, state.location.y-1))
+        n = State(state.time + 1, Location(state.location.x, state.location.y - 1))
         if self.state_valid(n) and self.transition_valid(state, n):
             neighbors.append(n)
         # Left action
-        n = State(state.time + 1, Location(state.location.x-1, state.location.y))
+        n = State(state.time + 1, Location(state.location.x - 1, state.location.y))
         if self.state_valid(n) and self.transition_valid(state, n):
             neighbors.append(n)
         # Right action
-        n = State(state.time + 1, Location(state.location.x+1, state.location.y))
+        n = State(state.time + 1, Location(state.location.x + 1, state.location.y))
         if self.state_valid(n) and self.transition_valid(state, n):
             neighbors.append(n)
         return neighbors
-
 
     def get_first_conflict(self, solution):
         max_t = max([len(plan) for plan in solution.values()])
@@ -155,10 +204,10 @@ class Environment(object):
 
             for agent_1, agent_2 in combinations(solution.keys(), 2):
                 state_1a = self.get_state(agent_1, solution, t)
-                state_1b = self.get_state(agent_1, solution, t+1)
+                state_1b = self.get_state(agent_1, solution, t + 1)
 
                 state_2a = self.get_state(agent_2, solution, t)
-                state_2b = self.get_state(agent_2, solution, t+1)
+                state_2b = self.get_state(agent_2, solution, t + 1)
 
                 if state_1a.is_equal_except_time(state_2b) and state_1b.is_equal_except_time(state_2a):
                     result.time = t
@@ -216,30 +265,47 @@ class Environment(object):
         goal = self.agent_dict[agent_name]["goal"]
         return fabs(state.location.x - goal.location.x) + fabs(state.location.y - goal.location.y)
 
-
     def is_at_goal(self, state, agent_name):
         goal_state = self.agent_dict[agent_name]["goal"]
         return state.is_equal_except_time(goal_state)
+
+    def is_around_goal(self, state, agent_name, bias):
+        goal_state = self.agent_dict[agent_name]["goal"]
+        return state.is_around(goal_state, bias)
 
     def make_agent_dict(self):
         for agent in self.agents:
             start_state = State(0, Location(agent['start'][0], agent['start'][1]))
             goal_state = State(0, Location(agent['goal'][0], agent['goal'][1]))
-
-            self.agent_dict.update({agent['name']:{'start':start_state, 'goal':goal_state}})
+            # obstacle = agent['obstacle']
+            self.agent_dict.update({agent['name']: {'start': start_state, 'goal': goal_state}})
 
     def compute_solution(self):
         solution = {}
         for agent in self.agent_dict.keys():
             self.constraints = self.constraint_dict.setdefault(agent, Constraints())
-            local_solution = self.a_star.search(agent)
+            # local_solution = self.a_star.search(agent)
+            local_solution = self.rrt.search(agent)
+            self.rrt_tree.append(self.rrt.tree)
             if not local_solution:
                 return False
-            solution.update({agent:local_solution})
+            solution.update({agent: local_solution})
+        return solution
+
+    def compute_solution_nmpc(self):
+        solution = {}
+        for agent_name, agent_data in self.agent_dict.items():
+            current_state = agent_data["start"]
+            target = agent_data["goal"]
+            x_traj, _ = self.nmpc_planner.plan(current_state, target)
+            solution[agent_name] = x_traj
+            if not solution:
+                return False
         return solution
 
     def compute_solution_cost(self, solution):
         return sum([len(path) for path in solution.values()])
+
 
 class HighLevelNode(object):
     def __init__(self):
@@ -257,11 +323,13 @@ class HighLevelNode(object):
     def __lt__(self, other):
         return self.cost < other.cost
 
+
 class CBS(object):
     def __init__(self, environment):
         self.env = environment
         self.open_set = set()
         self.closed_set = set()
+
     def search(self):
         start = HighLevelNode()
         # TODO: Initialize it in a better way
@@ -308,7 +376,7 @@ class CBS(object):
     def generate_plan(self, solution):
         plan = {}
         for agent, path in solution.items():
-            path_dict_list = [{'t':state.time, 'x':state.location.x, 'y':state.location.y} for state in path]
+            path_dict_list = [{'t': state.time, 'x': state.location.x, 'y': state.location.y} for state in path]
             plan[agent] = path_dict_list
         return plan
 
@@ -335,8 +403,10 @@ def main(inputFile, outputFile):
     # Searching
     cbs = CBS(env)
     solution = cbs.search()
+    for i, s in enumerate(solution.items()):
+        plot_rrt_path(env.rrt_tree[i], s[1], i, 10, 10, obstacles, agents[i]["start"], agents[i]["goal"])
     if not solution:
-        print(" Solution not found" )
+        print(" Solution not found")
         return
 
     # Write to output file
@@ -358,6 +428,8 @@ def run(dimensions, obstacles, agents, out_file):
     # Run CSB search
     cbs = CBS(env)
     solution = cbs.search()
+    for i, s in enumerate(solution.items()):
+        plot_rrt_path(env.rrt_tree[i], s[1], i, 10, 10, obstacles, agents[i]["start"], agents[i]["goal"])
     if not solution:
         print("Solution not found")
         return
@@ -368,6 +440,7 @@ def run(dimensions, obstacles, agents, out_file):
     output["cost"] = env.compute_solution_cost(solution)
     with open(out_file, 'w') as output_yaml:
         yaml.safe_dump(output, output_yaml)
+
 
 def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=None, goal=None):
     """

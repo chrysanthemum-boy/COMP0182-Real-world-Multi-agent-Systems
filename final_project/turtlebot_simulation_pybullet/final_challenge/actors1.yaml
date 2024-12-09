@@ -1,0 +1,15 @@
+agents:
+- goal:
+  - 8
+  - 6
+  name: 1
+  start:
+  - 9
+  - 9
+- goal:
+  - 2
+  - 6
+  name: 2
+  start:
+  - 0
+  - 9
