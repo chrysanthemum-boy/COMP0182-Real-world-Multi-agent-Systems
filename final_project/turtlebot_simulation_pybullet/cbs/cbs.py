@@ -313,7 +313,7 @@ class CBS(object):
         return plan
 
 
-def main(inputFile, outputFile):
+def main(inputFile, outputFile, num):
     # parser = argparse.ArgumentParser()
     # parser.add_argument("param", help="input file containing map and obstacles")
     # parser.add_argument("output", help="output file with the schedule")
@@ -335,6 +335,8 @@ def main(inputFile, outputFile):
     # Searching
     cbs = CBS(env)
     solution = cbs.search()
+    for i, s in enumerate(solution.items()):
+        plot_rrt_path([], s[1], i, 10, 10, obstacles, agents[i]["start"], agents[i]["goal"], num)
     if not solution:
         print(" Solution not found" )
         return
@@ -369,7 +371,7 @@ def run(dimensions, obstacles, agents, out_file):
     with open(out_file, 'w') as output_yaml:
         yaml.safe_dump(output, output_yaml)
 
-def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=None, goal=None):
+def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=None, goal=None, num1=0):
     """
     绘制RRT生成的路径以及障碍物、起点和目标点，并添加网格
     """
@@ -425,13 +427,13 @@ def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=No
     ax.set_yticks(range(10))
     ax.set_xticklabels(range(10))
     ax.set_yticklabels(range(10))
-    ax.set_title("RRT & CBS Path Planning")
+    ax.set_title("A* & CBS Path Planning")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.legend(loc='lower right')
 
     # 保存图像
-    plt.savefig(f"rrt{num + 1}.png", dpi=300)
+    plt.savefig(f"a_star{num + 1}_{num1}.png", dpi=300)
     plt.show()
 
 

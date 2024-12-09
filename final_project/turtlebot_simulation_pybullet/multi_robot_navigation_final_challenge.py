@@ -421,10 +421,10 @@ env_loaded = False
 agents, goals, env_loaded = read_input("final_challenge/env_2.yaml", env_loaded)
 
 # time.sleep(1000)
-cbs_rrt.main("final_challenge/env_2.yaml", "cbs_output_fetch_1.yaml")
+cbs.main("final_challenge/env_2.yaml", "cbs_output_fetch_1.yaml",1)
 schedule = read_output("cbs_output_fetch_1.yaml")
 _,goals2,env_loaded = read_input("final_challenge/env_2_stage.yaml", env_loaded)
-cbs_rrt.main("final_challenge/env_2_stage.yaml", "cbs_output_fetch_2.yaml")
+cbs.main("final_challenge/env_2_stage.yaml", "cbs_output_fetch_2.yaml",2)
 schedule2 = read_output("cbs_output_fetch_2.yaml")
 run(agents, goals, schedule, goals2, schedule2)
 time.sleep(2)

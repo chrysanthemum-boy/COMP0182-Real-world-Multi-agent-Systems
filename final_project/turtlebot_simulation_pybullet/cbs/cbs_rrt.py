@@ -381,7 +381,7 @@ class CBS(object):
         return plan
 
 
-def main(inputFile, outputFile):
+def main(inputFile, outputFile,num):
     # parser = argparse.ArgumentParser()
     # parser.add_argument("param", help="input file containing map and obstacles")
     # parser.add_argument("output", help="output file with the schedule")
@@ -404,7 +404,7 @@ def main(inputFile, outputFile):
     cbs = CBS(env)
     solution = cbs.search()
     for i, s in enumerate(solution.items()):
-        plot_rrt_path(env.rrt_tree[i], s[1], i, 10, 10, obstacles, agents[i]["start"], agents[i]["goal"])
+        plot_rrt_path(env.rrt_tree[i], s[1], i, 10, 10, obstacles, agents[i]["start"], agents[i]["goal"],num)
     if not solution:
         print(" Solution not found")
         return
@@ -442,7 +442,7 @@ def run(dimensions, obstacles, agents, out_file):
         yaml.safe_dump(output, output_yaml)
 
 
-def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=None, goal=None):
+def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=None, goal=None,num1=0):
     """
     绘制RRT生成的路径以及障碍物、起点和目标点，并添加网格
     """
@@ -504,7 +504,7 @@ def plot_rrt_path(tree, path, num, length=10, width=10, obstacles=None, start=No
     ax.legend(loc='lower right')
 
     # 保存图像
-    plt.savefig(f"rrt{num + 1}.png", dpi=300)
+    plt.savefig(f"rrt{num + 1}_{num1}.png", dpi=300)
     plt.show()
 
 
