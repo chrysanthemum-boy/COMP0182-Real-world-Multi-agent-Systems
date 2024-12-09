@@ -3,6 +3,8 @@ import math
 from math import fabs
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+
+
 class VertexConstraint(object):
     def __init__(self, time, location):
         self.time = time
@@ -31,9 +33,10 @@ class Location(object):
 
 
 class State(object):
-    def __init__(self, time, location):
+    def __init__(self, time, location, cost):
         self.time = time
         self.location = location
+        self.cost = cost
 
     def __eq__(self, other):
         return self.time == other.time and self.location == other.location
@@ -48,11 +51,11 @@ class State(object):
         return fabs(self.location.x - state.location.x) < bias and fabs(self.location.y - state.location.y) < bias
 
     def __str__(self):
-        return str((self.time, self.location.x, self.location.y))
+        return str((self.time, self.location.x, self.location.y, self.cost))
 
 
 class RRTStar:
-    def __init__(self, env, search_radius=1, max_iterations=50000, step_size=0.1, goal_bias=0.1):
+    def __init__(self, env, search_radius=1.5, max_iterations=50000, step_size=1, goal_bias=0.1):
         self.dimension = env.dimension
         self.obstacles = env.obstacles
         self.constraints = env.constraints
@@ -89,8 +92,9 @@ class RRTStar:
                          (to_node.location.y - from_node.location.y) / dist)
             new_node = State(from_node.time + 1,
                              Location(from_node.location.x + direction[0] * self.step_size,
-                                      from_node.location.y + direction[1] * self.step_size))
-            new_node.time = from_node.time + self.step_size
+                                      from_node.location.y + direction[1] * self.step_size),
+                             from_node.cost + self.step_size  # 累计代价
+                             )
 
             # 检查新节点是否与障碍物相交
             if self.line_intersects_obstacle(
@@ -107,25 +111,28 @@ class RRTStar:
             return goal_state
         else:
             # 否则随机采样
-            return State(0, Location(random.uniform(0, self.dimension[0]), random.uniform(0, self.dimension[1])))
+            return State(self.tree[-1].time + 1,
+                         Location(random.uniform(0, self.dimension[0]), random.uniform(0, self.dimension[1])),
+                         cost=self.tree[-1].cost)  # 初始代价为 0
 
     def rewire(self, new_node):
         """重新连接新节点周围的邻居"""
         for neighbor in self.tree:
             if self.distance(neighbor, new_node) < self.search_radius:
-                new_cost = new_node.time + self.distance(new_node, neighbor)
-                if new_cost < neighbor.time:
-                    neighbor.time = new_cost
+                new_cost = new_node.cost + self.distance(new_node, neighbor)
+                if new_cost < neighbor.cost:
+                    neighbor.cost = new_cost
                     self.parent_map[neighbor] = new_node
 
     def search(self, agent_name):
         """实现 RRT* 搜索"""
         initial_state = self.agent_dict[agent_name]["start"]
         goal_state = self.agent_dict[agent_name]["goal"]
-        initial_state.time = 0  # 起点代价为 0
-
+        initial_state.time = 0  # 起点时间为 0
+        initial_state.cost = 0  # 起点代价为 0
         self.tree = [initial_state]
         self.parent_map = {initial_state: None}
+        # parent_map = {initial_state: None}
         random.seed(42)
 
         for _ in range(self.max_iterations):
@@ -139,12 +146,12 @@ class RRTStar:
             new_node = self.steer(nearest_node, random_node)
 
             if new_node and self.state_valid(new_node):
+                new_node.time = nearest_node.time + 1
                 self.tree.append(new_node)
-                new_node.time = int(nearest_node.time + 1)
                 self.parent_map[new_node] = nearest_node
 
                 # Rewire: 优化新节点周围的邻居连接
-                self.rewire(new_node)
+                # self.rewire(new_node)
 
                 # 检查是否到达目标
                 if self.is_around_goal(new_node, agent_name, 0.1):
@@ -157,8 +164,8 @@ class RRTStar:
         """
         判断状态是否有效，即是否碰到障碍物
         """
-        if state.location.x < 0 or state.location.x >= self.dimension[0] - 0.5 \
-                or state.location.y < 0 or state.location.y >= self.dimension[1] - 0.5:
+        if state.location.x < 0 or state.location.x >= self.dimension[0] - 0.9 \
+                or state.location.y < 0 or state.location.y >= self.dimension[1] - 0.9:
             return False
 
         for obstacle in self.obstacles:
@@ -169,12 +176,20 @@ class RRTStar:
         return True
 
     def reconstruct_path(self, tree, current, parent_map):
-        """从目标节点反向回溯路径"""
+        """从目标节点反向回溯路径，并倒着计算 time"""
         path = [current]
-        print(path)
-        while parent_map.get(current):
+        # 假设目标节点的 time 为最大值，可以设置为从最大 time 开始递减
+        time_counter = len(tree) - 1  # 或者从一个你希望的初始值开始
+
+        # 避免死循环，直接通过 parent_map 回溯父节点
+        while parent_map.get(current):  # 如果当前节点有父节点
             current = parent_map[current]
+            # 更新节点的时间为递减值
+            # current.time = time_counter
             path.append(current)
+            # time_counter -= 1  # time 按照顺序递减
+
+        # 将路径反转并返回
         return path[::-1]
 
     def line_intersects_obstacle(self, line_start, line_end, obstacles):
@@ -191,6 +206,7 @@ class RRTStar:
                 if self.do_intersect(line_start, line_end, edge[0], edge[1]):
                     return True
         return False
+
     def on_segment(self, p, q, r):
         """检查点 q 是否在线段 pr 上"""
         if q[0] <= max(p[0], r[0]) and q[0] >= min(p[0], r[0]) and q[1] <= max(p[1], r[1]) and q[1] >= min(p[1], r[1]):
