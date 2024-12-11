@@ -4,25 +4,27 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle
 from matplotlib import animation
 import yaml
+from concurrent.futures import ThreadPoolExecutor
+
 
 # 全局参数
-SIM_TIME = 30.0                # 仿真总时间
-TIMESTEP = 0.1                # 单步时间间隔
+SIM_TIME = 30.0  # 仿真总时间
+TIMESTEP = 0.1  # 单步时间间隔
 NUMBER_OF_TIMESTEPS = int(SIM_TIME / TIMESTEP)
-ROBOT_RADIUS = 0.2            # 机器人的半径
-obstacle_radius = 0.5         # 障碍物的半径
-VMAX = 2                      # 最大速度
-VMIN = 0.2                    # 最小速度
+ROBOT_RADIUS = 0.2  # 机器人的半径
+obstacle_radius = 0.5  # 障碍物的半径
+VMAX = 2  # 最大速度
+VMIN = 0.2  # 最小速度
 
 # 碰撞代价参数
-Qc = 5.0                      # 碰撞代价权重
-kappa = 4.0                   # 碰撞代价调整系数
+Qc = 3.0  # 碰撞代价权重
+kappa = 4.0  # 碰撞代价调整系数
 
 # NMPC 参数
-HORIZON_LENGTH = 20            # 预测时域长度
-NMPC_TIMESTEP = 0.3           # NMPC计算的时间步
-upper_bound = [(1/np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
-lower_bound = [-(1/np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
+HORIZON_LENGTH = 4  # 预测时域长度
+NMPC_TIMESTEP = 0.3  # NMPC计算的时间步
+upper_bound = [(1 / np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
+lower_bound = [-(1 / np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
 
 # 固定障碍物
 with open("env_2.yaml", 'r') as param_file:
@@ -30,6 +32,7 @@ with open("env_2.yaml", 'r') as param_file:
         param = yaml.load(param_file, Loader=yaml.FullLoader)
     except yaml.YAMLError as exc:
         print(exc)
+
 
 def generate_boundary_obstacles(length, width):
     """
@@ -59,9 +62,11 @@ def generate_boundary_obstacles(length, width):
 
     return obstacles
 
+
 dimension = param["map"]["dimensions"]
 obstacles = param["map"]["obstacles"] + generate_boundary_obstacles(dimension[0], dimension[1])
 agents = np.array(param['agents'])
+
 
 # 主函数：仿真路径规划
 def simulate(filename):
@@ -73,18 +78,22 @@ def simulate(filename):
     robot_states = robot_start_positions.copy()
     robot_histories = [np.empty((2, NUMBER_OF_TIMESTEPS)) for _ in range(2)]
 
-    # 仿真每个时间步
-    for t in range(NUMBER_OF_TIMESTEPS):
-        for robot_index in range(len(robot_states)):
-            # 计算当前机器人的参考轨迹
-            xref = compute_xref(robot_states[robot_index], robot_goals[robot_index], HORIZON_LENGTH, NMPC_TIMESTEP)
+    # 创建线程池
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        for t in range(NUMBER_OF_TIMESTEPS):
+            # 构造任务列表
+            tasks = [
+                (robot_states[i], obstacles, compute_xref(robot_states[i], robot_goals[i], HORIZON_LENGTH, NMPC_TIMESTEP))
+                for i in range(len(robot_states))
+            ]
 
-            # 计算速度，考虑固定障碍物
-            vel, _ = compute_velocity(robot_states[robot_index], obstacles, xref)
+            # 并行计算所有机器人的速度
+            results = list(executor.map(lambda args: compute_velocity(*args), tasks))
 
             # 更新机器人状态
-            robot_states[robot_index] = update_state(robot_states[robot_index], vel, TIMESTEP)
-            robot_histories[robot_index][:, t] = robot_states[robot_index]
+            for i, (vel, _) in enumerate(results):
+                robot_states[i] = update_state(robot_states[i], vel, TIMESTEP)
+                robot_histories[i][:, t] = robot_states[i]
 
     # 绘制机器人和障碍物
     plot_robots_and_obstacles(robot_histories, obstacles, ROBOT_RADIUS, NUMBER_OF_TIMESTEPS, SIM_TIME, filename)
@@ -92,15 +101,21 @@ def simulate(filename):
 
 # 计算最优控制输入
 def compute_velocity(robot_state, fixed_obstacles, xref):
+    filtered_obstacles = filter_obstacles(robot_state, fixed_obstacles)
+
     u0 = np.random.rand(2 * HORIZON_LENGTH)  # 初始化随机控制序列
 
     def cost_fn(u):
-        return total_cost(u, robot_state, fixed_obstacles, xref)
+        return total_cost(u, robot_state, filtered_obstacles, xref)
 
     bounds = Bounds(lower_bound, upper_bound)
     res = minimize(cost_fn, u0, method='SLSQP', bounds=bounds)
     velocity = res.x[:2]
     return velocity, res.x
+
+def compute_robot_velocity(args):
+    robot_state, fixed_obstacles, xref = args
+    return compute_velocity(robot_state, fixed_obstacles, xref)
 
 
 # 计算参考轨迹
@@ -115,11 +130,10 @@ def compute_xref(start, goal, number_of_steps, timestep):
     return np.linspace(start, new_goal, number_of_steps).flatten()
 
 
-
 # 总代价函数
 def total_cost(u, robot_state, fixed_obstacles, xref):
     x_robot = update_state(robot_state, u, NMPC_TIMESTEP)
-    c1 = tracking_cost(x_robot, xref)           # 轨迹跟踪代价
+    c1 = tracking_cost(x_robot, xref)  # 轨迹跟踪代价
     c2 = total_collision_cost(x_robot, fixed_obstacles)  # 碰撞代价
     return c1 + c2
 
@@ -153,6 +167,12 @@ def update_state(x0, u, timestep):
     kron = np.kron(lower_triangular_ones_matrix, np.eye(2))
     new_state = np.vstack([np.eye(2)] * N) @ x0 + kron @ u * timestep
     return new_state
+
+
+def filter_obstacles(robot_state, obstacles, radius=5.0):
+    # 仅保留在半径范围内的障碍物
+    filtered = [obs for obs in obstacles if np.linalg.norm(robot_state - obs) < radius]
+    return np.array(filtered)
 
 
 # 绘制机器人和障碍物的运动轨迹
@@ -219,7 +239,6 @@ def plot_robots_and_obstacles(robots, obstacles, robot_radius, num_steps, sim_ti
         ani = animation.FuncAnimation(
             fig, animate, frames=np.arange(1, num_steps), interval=200, blit=True, init_func=init)
         ani.save(filename, "ffmpeg", fps=30)
-
 
 
 # 运行仿真

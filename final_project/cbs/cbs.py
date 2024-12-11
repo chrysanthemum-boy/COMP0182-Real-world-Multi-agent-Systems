@@ -21,7 +21,7 @@ from copy import deepcopy
 import openai
 
 from a_star import AStar
-from nmpc import NMPCPlanner
+# from nmpc import NMPCPlanner
 from rrt import RRT
 from rrt_star import RRTStar
 

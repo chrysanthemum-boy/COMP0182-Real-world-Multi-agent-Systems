@@ -55,7 +55,7 @@ class State(object):
 
 
 class RRTStar:
-    def __init__(self, env, search_radius=1.5, max_iterations=50000, step_size=1, goal_bias=0.1):
+    def __init__(self, env, search_radius=1.5, max_iterations=50000, step_size=0.5, goal_bias=0.1):
         self.dimension = env.dimension
         self.obstacles = env.obstacles
         self.constraints = env.constraints
