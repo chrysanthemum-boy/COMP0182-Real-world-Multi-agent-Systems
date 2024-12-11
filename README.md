@@ -1,5 +1,17 @@
 # COMP0182-Real-world-Multi-agent-Systems
 
+### File Structure
+- final_project
+  - nmpc_multi.py
+  - turtlebot_simulation_pybullet
+    - cbs
+        - cbs.py
+        - cbs_rrt.py
+        - cbs_rrt_star.py
+    - multi_robot_navigation_final_challenge.py
+  - real_world
+    - goal_pose_solution_multi.py
+    - goal_pose_solution_single.py
 
 ### Run NMPC
 ```bash
@@ -16,9 +28,10 @@ cd COMP0182-Real-world-Multi-agent-Systems
 cd turtlebot_simulation_pybullet
 python multi_robot_navigation_final_challenge.py
 ```
+### Simulation
 Change the algorithm in the code `multi_robot_navigation_final_challenge.py`
 
-A*
+#### A*
 ```python
 cbs.main("final_challenge/env_2.yaml", "cbs_output_fetch_1.yaml",1)
 schedule = read_output("cbs_output_fetch_1.yaml")
@@ -29,7 +42,7 @@ run(agents, goals, schedule, goals2, schedule2)
 time.sleep(2)
 ```
 
-RRT
+#### RRT
 ```python
 cbs_rrt.main("final_challenge/env_2.yaml", "cbs_output_fetch_1.yaml",1)
 schedule = read_output("cbs_output_fetch_1.yaml")
@@ -39,7 +52,7 @@ schedule2 = read_output("cbs_output_fetch_2.yaml")
 run(agents, goals, schedule, goals2, schedule2)
 time.sleep(2)
 ```
-RRT*
+#### RRT*
 ```python
 cbs_rrt_star.main("final_challenge/env_2.yaml", "cbs_output_fetch_1.yaml",1)
 schedule = read_output("cbs_output_fetch_1.yaml")
