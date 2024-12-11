@@ -7,26 +7,26 @@ import yaml
 from concurrent.futures import ThreadPoolExecutor
 
 
-# 全局参数
-SIM_TIME = 30.0  # 仿真总时间
-TIMESTEP = 0.1  # 单步时间间隔
+# Global parameters
+SIM_TIME = 30.0  # Total simulation time
+TIMESTEP = 0.1  # Time interval for each step
 NUMBER_OF_TIMESTEPS = int(SIM_TIME / TIMESTEP)
-ROBOT_RADIUS = 0.2  # 机器人的半径
-obstacle_radius = 0.5  # 障碍物的半径
-VMAX = 2  # 最大速度
-VMIN = 0.2  # 最小速度
+ROBOT_RADIUS = 0.2  # Radius of the robot
+obstacle_radius = 0.5  # Radius of obstacles
+VMAX = 2  # Maximum velocity
+VMIN = 0.2  # Minimum velocity
 
-# 碰撞代价参数
-Qc = 3.0  # 碰撞代价权重
-kappa = 4.0  # 碰撞代价调整系数
+# Collision cost parameters
+Qc = 3.0  # Weight for collision cost
+kappa = 4.0  # Adjustment coefficient for collision cost
 
-# NMPC 参数
-HORIZON_LENGTH = 4  # 预测时域长度
-NMPC_TIMESTEP = 0.3  # NMPC计算的时间步
+# NMPC parameters
+HORIZON_LENGTH = 4  # Prediction horizon length
+NMPC_TIMESTEP = 0.3  # NMPC computation timestep
 upper_bound = [(1 / np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
 lower_bound = [-(1 / np.sqrt(2)) * VMAX] * HORIZON_LENGTH * 2
 
-# 固定障碍物
+# Fixed obstacles
 with open("env_2.yaml", 'r') as param_file:
     try:
         param = yaml.load(param_file, Loader=yaml.FullLoader)
@@ -36,29 +36,29 @@ with open("env_2.yaml", 'r') as param_file:
 
 def generate_boundary_obstacles(length, width):
     """
-    生成围绕10x10区域的边界障碍物。
+    Generate boundary obstacles around a 10x10 grid.
 
-    :param length: 网格的长度（10）
-    :param width: 网格的宽度（10）
-    :return: numpy 数组，障碍物的坐标，形状为 (n, 2)
+    :param length: Length of the grid (10)
+    :param width: Width of the grid (10)
+    :return: Numpy array of obstacle coordinates, shape (n, 2)
     """
     obstacles = []
     obstacles_inside = param["map"]["obstacles"]
-    # 底边和顶边
+    # Bottom and top edges
     for i in range(length):
-        obstacles.append([i, -1])  # 底边
-        obstacles.append([i, width])  # 顶边
+        obstacles.append([i, -1])  # Bottom edge
+        obstacles.append([i, width])  # Top edge
 
-    # 左边和右边
+    # Left and right edges
     for i in range(width):
-        obstacles.append([-1, i])  # 左边
-        obstacles.append([length, i])  # 右边
+        obstacles.append([-1, i])  # Left edge
+        obstacles.append([length, i])  # Right edge
 
-    # 四个角的障碍物
-    obstacles.append([-1, -1])  # 左下角
-    obstacles.append([length, -1])  # 右下角
-    obstacles.append([-1, width])  # 左上角
-    obstacles.append([length, width])  # 右上角
+    # Corners
+    obstacles.append([-1, -1])  # Bottom-left corner
+    obstacles.append([length, -1])  # Bottom-right corner
+    obstacles.append([-1, width])  # Top-left corner
+    obstacles.append([length, width])  # Top-right corner
 
     return obstacles
 
@@ -68,42 +68,42 @@ obstacles = param["map"]["obstacles"] + generate_boundary_obstacles(dimension[0]
 agents = np.array(param['agents'])
 
 
-# 主函数：仿真路径规划
+# Main function: Simulate path planning
 def simulate(filename):
-    # 初始化两台机器人的起始位置和目标位置
+    # Initialize starting and goal positions for two robots
     robot_start_positions = [np.array(agents[0]['start']), np.array(agents[1]['start'])]
     robot_goals = [np.array(agents[0]['goal']), np.array(agents[1]['goal'])]
 
-    # 记录机器人状态历史
+    # Record robot states over time
     robot_states = robot_start_positions.copy()
     robot_histories = [np.empty((2, NUMBER_OF_TIMESTEPS)) for _ in range(2)]
 
-    # 创建线程池
+    # Create a thread pool
     with ThreadPoolExecutor(max_workers=2) as executor:
         for t in range(NUMBER_OF_TIMESTEPS):
-            # 构造任务列表
+            # Create task list
             tasks = [
                 (robot_states[i], obstacles, compute_xref(robot_states[i], robot_goals[i], HORIZON_LENGTH, NMPC_TIMESTEP))
                 for i in range(len(robot_states))
             ]
 
-            # 并行计算所有机器人的速度
+            # Compute velocities for all robots in parallel
             results = list(executor.map(lambda args: compute_velocity(*args), tasks))
 
-            # 更新机器人状态
+            # Update robot states
             for i, (vel, _) in enumerate(results):
                 robot_states[i] = update_state(robot_states[i], vel, TIMESTEP)
                 robot_histories[i][:, t] = robot_states[i]
 
-    # 绘制机器人和障碍物
+    # Plot robots and obstacles
     plot_robots_and_obstacles(robot_histories, obstacles, ROBOT_RADIUS, NUMBER_OF_TIMESTEPS, SIM_TIME, filename)
 
 
-# 计算最优控制输入
+# Compute optimal control input
 def compute_velocity(robot_state, fixed_obstacles, xref):
     filtered_obstacles = filter_obstacles(robot_state, fixed_obstacles)
 
-    u0 = np.random.rand(2 * HORIZON_LENGTH)  # 初始化随机控制序列
+    u0 = np.random.rand(2 * HORIZON_LENGTH)  # Initialize random control sequence
 
     def cost_fn(u):
         return total_cost(u, robot_state, filtered_obstacles, xref)
@@ -113,37 +113,33 @@ def compute_velocity(robot_state, fixed_obstacles, xref):
     velocity = res.x[:2]
     return velocity, res.x
 
-def compute_robot_velocity(args):
-    robot_state, fixed_obstacles, xref = args
-    return compute_velocity(robot_state, fixed_obstacles, xref)
 
-
-# 计算参考轨迹
+# Compute reference trajectory
 def compute_xref(start, goal, number_of_steps, timestep):
-    dir_vec = (goal - start).astype(np.float64)  # 确保是浮点数运算
+    dir_vec = (goal - start).astype(np.float64)  # Ensure floating-point computation
     norm = np.linalg.norm(dir_vec)
     if norm < 0.1:
         new_goal = start
     else:
-        dir_vec /= norm  # 单位化方向向量
+        dir_vec /= norm  # Normalize direction vector
         new_goal = start + dir_vec * VMAX * timestep * number_of_steps
     return np.linspace(start, new_goal, number_of_steps).flatten()
 
 
-# 总代价函数
+# Total cost function
 def total_cost(u, robot_state, fixed_obstacles, xref):
     x_robot = update_state(robot_state, u, NMPC_TIMESTEP)
-    c1 = tracking_cost(x_robot, xref)  # 轨迹跟踪代价
-    c2 = total_collision_cost(x_robot, fixed_obstacles)  # 碰撞代价
+    c1 = tracking_cost(x_robot, xref)  # Trajectory tracking cost
+    c2 = total_collision_cost(x_robot, fixed_obstacles)  # Collision cost
     return c1 + c2
 
 
-# 轨迹跟踪代价
+# Trajectory tracking cost
 def tracking_cost(x, xref):
     return np.linalg.norm(x - xref)
 
 
-# 碰撞代价
+# Total collision cost
 def total_collision_cost(robot, obstacles):
     total_cost = 0
     for i in range(HORIZON_LENGTH):
@@ -153,14 +149,14 @@ def total_collision_cost(robot, obstacles):
     return total_cost
 
 
-# 单步碰撞代价
+# Single-step collision cost
 def collision_cost(x0, x1):
     effective_radius = ROBOT_RADIUS + obstacle_radius
     d = np.linalg.norm(x0 - x1)
     return Qc / (1 + np.exp(kappa * (d - effective_radius)))
 
 
-# 更新机器人状态
+# Update robot state
 def update_state(x0, u, timestep):
     N = int(len(u) / 2)
     lower_triangular_ones_matrix = np.tril(np.ones((N, N)))
@@ -170,22 +166,22 @@ def update_state(x0, u, timestep):
 
 
 def filter_obstacles(robot_state, obstacles, radius=5.0):
-    # 仅保留在半径范围内的障碍物
+    # Only retain obstacles within a certain radius
     filtered = [obs for obs in obstacles if np.linalg.norm(robot_state - obs) < radius]
     return np.array(filtered)
 
 
-# 绘制机器人和障碍物的运动轨迹
+# Plot robot and obstacle trajectories
 def plot_robots_and_obstacles(robots, obstacles, robot_radius, num_steps, sim_time, filename):
     """
-    绘制多个机器人和障碍物的动画，并保存到文件。
+    Plot the movement of multiple robots and obstacles as an animation, and save to a file.
 
-    :param robots: list，每个元素是机器人轨迹的 numpy 数组，形状为 (2, num_steps)
-    :param obstacles: numpy 数组，形状为 (n_obstacles, 2)，固定障碍物的位置
-    :param robot_radius: float，机器人的半径
-    :param num_steps: int，仿真的时间步数
-    :param sim_time: float，总仿真时间
-    :param filename: str，保存的文件名
+    :param robots: list, each element is a numpy array of robot trajectories, shape (2, num_steps)
+    :param obstacles: numpy array, shape (n_obstacles, 2), positions of fixed obstacles
+    :param robot_radius: float, radius of the robot
+    :param num_steps: int, number of simulation steps
+    :param sim_time: float, total simulation time
+    :param filename: str, name of the file to save
     """
     fig, ax = plt.subplots()
     ax.set_xlim(-1.5, 10.5)
@@ -193,53 +189,53 @@ def plot_robots_and_obstacles(robots, obstacles, robot_radius, num_steps, sim_ti
     ax.set_aspect('equal')
     ax.grid()
 
-    # 绘制固定障碍物
+    # Draw fixed obstacles
     for obs in obstacles:
         ax.add_patch(Rectangle((obs[0] - 0.5, obs[1] - 0.5), 1, 1, edgecolor="black", alpha=1))
 
-    # 初始化机器人和轨迹
+    # Initialize robots and trajectories
     robot_patches = []
-    trajectory_lines = []  # 用于存储每个机器人的轨迹线对象
+    trajectory_lines = []  # Store trajectory line objects for each robot
     for robot in robots:
-        # 初始化机器人
+        # Initialize robot
         patch = Circle((robot[0, 0], robot[1, 0]), robot_radius, facecolor='green', edgecolor='black')
         robot_patches.append(patch)
         ax.add_patch(patch)
 
-        # 初始化机器人轨迹
-        line, = ax.plot([], [], '--', label=f'Robot {len(robot_patches)}')  # 虚线表示轨迹
+        # Initialize robot trajectory
+        line, = ax.plot([], [], '--', label=f'Robot {len(robot_patches)}')  # Dashed line for trajectory
         trajectory_lines.append(line)
 
-    # 动画初始化
+    # Animation initialization
     def init():
         for patch in robot_patches:
-            patch.center = (0, 0)  # 初始化机器人位置
+            patch.center = (0, 0)  # Initialize robot position
         for line in trajectory_lines:
-            line.set_data([], [])  # 清空轨迹
+            line.set_data([], [])  # Clear trajectories
         return robot_patches + trajectory_lines
 
-    # 动画更新
+    # Animation update
     def animate(i):
         for idx, robot in enumerate(robots):
-            # 更新机器人位置
+            # Update robot position
             robot_patches[idx].center = (robot[0, i], robot[1, i])
-            # 更新轨迹
-            trajectory_lines[idx].set_data(robot[0, :i + 1], robot[1, :i + 1])  # 累积显示轨迹
+            # Update trajectory
+            trajectory_lines[idx].set_data(robot[0, :i + 1], robot[1, :i + 1])  # Accumulate trajectory
         return robot_patches + trajectory_lines
 
-    # 动画实时显示
+    # Real-time animation display
     init()
     step = sim_time / num_steps
     for i in range(num_steps):
         animate(i)
         plt.pause(step)
 
-    # 保存动画
+    # Save animation
     if filename:
         ani = animation.FuncAnimation(
             fig, animate, frames=np.arange(1, num_steps), interval=200, blit=True, init_func=init)
         ani.save(filename, "ffmpeg", fps=30)
 
 
-# 运行仿真
+# Run simulation
 simulate("multi_robot.mp4")
